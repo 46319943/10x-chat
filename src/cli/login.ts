@@ -214,10 +214,12 @@ async function checkLoginStatus(profileMode: ProfileMode = 'shared'): Promise<vo
 
   for (const name of listProviders()) {
     const provider = getProvider(name);
+    // headlessBlocked providers (e.g. ChatGPT/Cloudflare) need a real browser
+    const headless = !provider.config.headlessBlocked;
     try {
       const browser = await launchBrowser({
         provider: name,
-        headless: true,
+        headless,
         url: provider.config.url,
         profileMode,
       });

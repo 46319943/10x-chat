@@ -28,8 +28,7 @@ function createMockPage(options: { hasOnboardingModal?: boolean; hasComposer?: b
       selector.includes('textbox');
     const _isLogin = selector.includes('Log in') || selector.includes('Sign up');
 
-    const visible =
-      hasOnboardingModal && isOverlay ? true : hasComposer && isComposer ? true : false;
+    const visible = hasOnboardingModal && isOverlay ? true : !!(hasComposer && isComposer);
 
     const locator = {
       first: () => locator,

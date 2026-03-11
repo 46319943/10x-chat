@@ -22,6 +22,12 @@ export interface ProviderConfig {
   models?: string[];
   defaultModel?: string;
   defaultTimeoutMs: number;
+  /**
+   * If true, the provider's site uses bot-detection (e.g. Cloudflare) that
+   * permanently blocks headless Chromium. Chat sessions will automatically
+   * run in headed (visible browser) mode for this provider.
+   */
+  headlessBlocked?: boolean;
 }
 
 export interface GeneratedImage {
