@@ -88,33 +88,101 @@ const geminiResearch: ResearchProviderConfig = {
 
 const chatgptResearch: ResearchProviderConfig = {
   async activateResearch(page: Page) {
-    // ChatGPT deep research: look for "Deep Research" or "Research" button/toggle
-    // Usually appears as a mode toggle or in the model picker
-    const researchBtn = page
-      .locator(
-        'button:has-text("Deep research"), [data-testid*="research"], button:has-text("Research")',
-      )
-      .first();
-    const visible = await researchBtn.isVisible().catch(() => false);
-    if (visible) {
-      await researchBtn.click();
-      await page.waitForTimeout(1000);
+    // ChatGPT deep research: click the sidebar link to navigate to /deep-research
+    // This puts the composer into deep research mode with a "Deep research" chip.
+    const sidebarLink = page.locator('[data-testid="deep-research-sidebar-item"]').first();
+    if (await sidebarLink.isVisible().catch(() => false)) {
+      await sidebarLink.click();
+      await page.waitForTimeout(3000);
+    }
+    // Verify deep research mode is active (chip in composer footer)
+    const chip = page.locator('[aria-label*="Deep research"]').first();
+    if (await chip.isVisible().catch(() => false)) {
+      console.log('  Deep research mode active');
     }
   },
   progressSelector: '[data-message-author-role="assistant"]',
   async getProgress(page: Page) {
-    const lastTurn = page.locator('[data-message-author-role="assistant"]').last();
-    const text = (await lastTurn.textContent().catch(() => ''))?.trim() ?? '';
-    // Extract just the progress part (first few lines)
+    // ChatGPT deep research navigates: /deep-research → /c/<id> once result arrives.
+    const url = page.url();
+    if (url.includes('/deep-research')) {
+      // Still researching — try to find any progress text in the page
+      const bodyText = await page.evaluate(() => {
+        const main = document.querySelector('main');
+        if (!main) return '';
+        const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+        const texts: string[] = [];
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text)) {
+          const t = node.textContent?.trim();
+          if (t && t.length > 20 && !t.startsWith('window.')) texts.push(t);
+        }
+        return texts.join(' ').slice(0, 300);
+      });
+      return bodyText || 'Researching...';
+    }
+
+    // At /c/<id> — extract assistant response robustly (DOM varies across experiments)
+    const text = await page.evaluate(() => {
+      const selectors = [
+        '[data-message-author-role="assistant"]',
+        'main article',
+        'main [class*="prose"]',
+      ];
+      let best = '';
+      for (const sel of selectors) {
+        const nodes = Array.from(document.querySelectorAll(sel));
+        for (const n of nodes) {
+          const t = (n.textContent || '').trim();
+          if (t.length > best.length && !t.startsWith('window.__oai_')) {
+            best = t;
+          }
+        }
+      }
+      return best.slice(0, 5000);
+    });
+
+    if (!text) return '';
     return text.split('\n').slice(0, 3).join(' ').slice(0, 200);
   },
   async isResearching(page: Page) {
-    const stopBtn = page.locator('button[aria-label="Stop streaming"]').first();
-    return stopBtn.isVisible().catch(() => false);
+    const url = page.url();
+    // If still at /deep-research, research is definitely still running
+    if (url.includes('/deep-research')) return true;
+    // At /c/<id> — check for streaming indicators
+    const stopBtn = await page
+      .locator('button[aria-label="Stop streaming"], button[aria-label="Stop generating"]')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    return stopBtn;
   },
   async getReport(page: Page) {
-    const lastTurn = page.locator('[data-message-author-role="assistant"]').last();
-    return (await lastTurn.textContent().catch(() => ''))?.trim() ?? '';
+    // Wait briefly for /c/<id> navigation if needed
+    const url = page.url();
+    if (url.includes('/deep-research')) {
+      await page.waitForURL((u) => u.pathname.startsWith('/c/'), { timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(5_000);
+    }
+
+    // Robust extraction across ChatGPT UI variants
+    const text = await page.evaluate(() => {
+      const selectors = [
+        '[data-message-author-role="assistant"]',
+        'main article',
+        'main [class*="prose"]',
+      ];
+      let best = '';
+      for (const sel of selectors) {
+        const nodes = Array.from(document.querySelectorAll(sel));
+        for (const n of nodes) {
+          const t = (n.textContent || '').trim();
+          if (t.length > best.length && !t.startsWith('window.__oai_')) best = t;
+        }
+      }
+      return best;
+    });
+    return text.trim();
   },
   async getReportHtml(page: Page) {
     const lastTurn = page.locator('[data-message-author-role="assistant"]').last();
@@ -256,43 +324,51 @@ export async function runResearch(options: ResearchOptions): Promise<ResearchRes
     let lastProgress = '';
     let stableCount = 0;
     const stableThreshold = 5; // more conservative — deep research can pause between sections
-    let emptyCount = 0;
-
     while (Date.now() - startTime < timeoutMs) {
       const researching = await researchConfig.isResearching(browser.page);
       const progress = await researchConfig.getProgress(browser.page);
 
       // Show progress updates
-      if (progress && progress !== lastProgress) {
+      if (progress && progress !== lastProgress && progress !== 'Researching...') {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         const preview = progress.length > 120 ? `${progress.slice(0, 120)}...` : progress;
         console.log(chalk.dim(`  [${elapsed}s] ${preview}`));
         lastProgress = progress;
         stableCount = 0;
-        emptyCount = 0;
-      } else if (!researching && progress.length > 0) {
+      } else if (!researching && progress.length > 0 && progress !== 'Researching...') {
         // Content exists and no streaming indicators — may be done
         stableCount++;
         if (stableCount >= stableThreshold) {
           console.log(chalk.green('\n✓ Research complete'));
           break;
         }
-      } else if (!researching && progress.length === 0) {
-        // No content and no indicators — response hasn't loaded yet or something wrong
-        emptyCount++;
-        if (emptyCount > 20) {
-          // After ~100s of nothing, give up
-          console.log(chalk.yellow('\n⚠ No response detected'));
-          break;
+      } else if (researching) {
+        // Still researching — log periodic heartbeat
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        if (elapsed % 30 < (pollIntervalMs / 1000)) {
+          console.log(chalk.dim(`  [${elapsed}s] Still researching...`));
         }
+        stableCount = 0;
       }
-      // If still researching, keep waiting regardless of stable count
 
       await browser.page.waitForTimeout(pollIntervalMs);
     }
 
     // Step 4: Extract the final report
-    const report = await researchConfig.getReport(browser.page);
+    let report = await researchConfig.getReport(browser.page);
+
+    // Fallback: if custom extractor got nothing, use provider captureResponse
+    // (handles provider-specific SPA/DOM edge cases).
+    if (!report || report.trim().length < 10) {
+      const remainingMs = Math.max(timeoutMs - (Date.now() - startTime), 15_000);
+      const captured = await provider.actions
+        .captureResponse(browser.page, { timeoutMs: remainingMs })
+        .catch(() => null);
+      if (captured?.text && captured.text.trim().length > report.trim().length) {
+        report = captured.text;
+      }
+    }
+
     const truncated = Date.now() - startTime >= timeoutMs && stableCount < stableThreshold;
 
     // Save response

@@ -219,23 +219,31 @@ export const chatgptActions: ProviderActions = {
     const finalRemainingMs = Math.max(timeoutMs - (Date.now() - startTime), 5_000);
     const markdown = (await lastTurn.innerHTML({ timeout: finalRemainingMs })) ?? '';
 
-    // Extract generated images (DALL-E)
+    // Extract generated images (DALL-E / GPT-Image)
+    // ChatGPT uses alt="Generated image: <description>" and src containing
+    // backend-api/estuary/content with file IDs.
     const images: GeneratedImage[] = await page.evaluate(() => {
       const seen = new Set<string>();
       const results: { url: string; alt: string; width: number; height: number }[] = [];
-      const imgs = Array.from(document.querySelectorAll('img[alt="Generated image"]'));
+      const imgs = Array.from(
+        document.querySelectorAll(
+          'img[alt^="Generated image"], img[src*="estuary/content"]',
+        ),
+      );
       for (const img of imgs) {
         const src = img.getAttribute('src') ?? '';
+        const alt = img.getAttribute('alt') ?? '';
+        const w = (img as HTMLImageElement).naturalWidth;
+        const h = (img as HTMLImageElement).naturalHeight;
+        // Skip small icons/avatars and profile images
+        if (w > 0 && w < 128 && h > 0 && h < 128) continue;
+        if (alt === 'Profile image') continue;
+        // Deduplicate by file ID in the URL
         const idMatch = src.match(/[?&]id=([^&]+)/);
         const key = idMatch ? idMatch[1] : src;
         if (!key || seen.has(key)) continue;
         seen.add(key);
-        results.push({
-          url: src,
-          alt: img.getAttribute('alt') ?? '',
-          width: (img as HTMLImageElement).naturalWidth,
-          height: (img as HTMLImageElement).naturalHeight,
-        });
+        results.push({ url: src, alt, width: w, height: h });
       }
       return results;
     });

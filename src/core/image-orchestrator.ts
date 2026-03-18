@@ -40,27 +40,25 @@ const chatgptImageGen: ImageGenProviderConfig = {
     return page.evaluate(() => {
       const seen = new Set<string>();
       const results: { url: string; alt: string; width: number; height: number }[] = [];
-      // DALL-E generated images
+      // DALL-E / GPT-Image: alt starts with "Generated image" and src uses
+      // backend-api/estuary/content with file IDs
       const imgs = Array.from(
         document.querySelectorAll(
-          'img[alt="Generated image"], img[alt*="DALL"], img[data-testid*="image"]',
+          'img[alt^="Generated image"], img[src*="estuary/content"]',
         ),
       );
       for (const img of imgs) {
         const src = img.getAttribute('src') ?? '';
+        const alt = img.getAttribute('alt') ?? '';
+        const w = (img as HTMLImageElement).naturalWidth;
+        const h = (img as HTMLImageElement).naturalHeight;
+        if (w > 0 && w < 128 && h > 0 && h < 128) continue;
+        if (alt === 'Profile image') continue;
         const idMatch = src.match(/[?&]id=([^&]+)/);
         const key = idMatch ? idMatch[1] : src;
         if (!key || seen.has(key)) continue;
-        const w = (img as HTMLImageElement).naturalWidth;
-        const h = (img as HTMLImageElement).naturalHeight;
-        if (w > 0 && w < 64 && h > 0 && h < 64) continue;
         seen.add(key);
-        results.push({
-          url: src,
-          alt: img.getAttribute('alt') ?? '',
-          width: w,
-          height: h,
-        });
+        results.push({ url: src, alt, width: w, height: h });
       }
       return results;
     });
