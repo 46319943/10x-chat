@@ -233,11 +233,30 @@ export async function runResearch(options: ResearchOptions): Promise<ResearchRes
     console.log(chalk.dim('Submitting research query...'));
     await provider.actions.submitPrompt(browser.page, options.prompt);
 
-    // Step 3: Poll for progress with non-blocking status updates
+    // Step 3: Wait for the initial response to appear
+    console.log(chalk.dim('Waiting for response...'));
+    const initialWaitMs = Math.min(timeoutMs / 2, 60_000);
+    let hasInitialContent = false;
+    const waitStart = Date.now();
+    while (Date.now() - waitStart < initialWaitMs) {
+      const text = await researchConfig.getProgress(browser.page);
+      const researching = await researchConfig.isResearching(browser.page);
+      if (text.length > 0 || researching) {
+        hasInitialContent = true;
+        break;
+      }
+      await browser.page.waitForTimeout(2_000);
+    }
+    if (!hasInitialContent) {
+      console.log(chalk.yellow('  No response detected yet, continuing to poll...'));
+    }
+
+    // Step 4: Poll for progress with non-blocking status updates
     console.log(chalk.dim('Research in progress...\n'));
     let lastProgress = '';
     let stableCount = 0;
-    const stableThreshold = 3;
+    const stableThreshold = 5; // more conservative — deep research can pause between sections
+    let emptyCount = 0;
 
     while (Date.now() - startTime < timeoutMs) {
       const researching = await researchConfig.isResearching(browser.page);
@@ -250,13 +269,24 @@ export async function runResearch(options: ResearchOptions): Promise<ResearchRes
         console.log(chalk.dim(`  [${elapsed}s] ${preview}`));
         lastProgress = progress;
         stableCount = 0;
-      } else if (!researching) {
+        emptyCount = 0;
+      } else if (!researching && progress.length > 0) {
+        // Content exists and no streaming indicators — may be done
         stableCount++;
-        if (stableCount >= stableThreshold && lastProgress.length > 0) {
+        if (stableCount >= stableThreshold) {
           console.log(chalk.green('\n✓ Research complete'));
           break;
         }
+      } else if (!researching && progress.length === 0) {
+        // No content and no indicators — response hasn't loaded yet or something wrong
+        emptyCount++;
+        if (emptyCount > 20) {
+          // After ~100s of nothing, give up
+          console.log(chalk.yellow('\n⚠ No response detected'));
+          break;
+        }
       }
+      // If still researching, keep waiting regardless of stable count
 
       await browser.page.waitForTimeout(pollIntervalMs);
     }
