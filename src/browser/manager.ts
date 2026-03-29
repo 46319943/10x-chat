@@ -1,8 +1,9 @@
 import { mkdir } from 'node:fs/promises';
-import { type BrowserContext, chromium, type Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 import { getIsolatedProfileDir, getSharedProfileDir } from '../paths.js';
 import type { ProfileMode, ProviderName } from '../types.js';
 import { launchSharedBrowserSession } from './daemon.js';
+import { getChromium } from './engine.js';
 import { acquireProfileLock, type ProfileLock } from './lock.js';
 import { CHROMIUM_ARGS } from './process.js';
 import { saveStorageState } from './state.js';
@@ -101,7 +102,7 @@ async function launchSharedPersistentBrowser(opts: LaunchOptions): Promise<Brows
   let page: Page;
   try {
     const channel = detectChromeChannel();
-    context = await chromium.launchPersistentContext(profileDir, {
+    context = await (await getChromium()).launchPersistentContext(profileDir, {
       headless,
       viewport: { width: 1280, height: 900 },
       ...(channel ? { channel } : {}),
@@ -151,7 +152,7 @@ async function launchIsolatedBrowser(opts: LaunchOptions): Promise<BrowserSessio
   let page: Page;
   try {
     const channel = detectChromeChannel();
-    context = await chromium.launchPersistentContext(profileDir, {
+    context = await (await getChromium()).launchPersistentContext(profileDir, {
       headless,
       viewport: { width: 1280, height: 900 },
       ...(channel ? { channel } : {}),

@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { getChromium } from '../browser/engine.js';
 import { ConfigurationError } from './errors.js';
 
 export interface PlaywrightCookie {
@@ -195,7 +195,7 @@ async function readProfileStorageState(profileDir?: string): Promise<PlaywrightS
     // Fall back to extracting storage state from the persistent profile.
   }
 
-  const context = await chromium.launchPersistentContext(dir, {
+  const context = await (await getChromium()).launchPersistentContext(dir, {
     headless: true,
     viewport: { width: 1280, height: 900 },
     args: ['--disable-blink-features=AutomationControlled', '--no-first-run'],

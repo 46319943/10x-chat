@@ -4,16 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage } from 'node:http';
 import path from 'node:path';
-import {
-  type Browser,
-  type BrowserContext,
-  chromium,
-  type Download,
-  type FileChooser,
-  type Locator,
-  type Page,
-} from 'playwright';
+import type { Browser, BrowserContext, Download, FileChooser, Locator, Page } from 'playwright';
 import { getAppDir } from '../paths.js';
+import { getChromium, getEngineName } from './engine.js';
 import { CHROMIUM_ARGS } from './process.js';
 import { detectChromeChannel, STEALTH_INIT_SCRIPT } from './stealth.js';
 
@@ -565,6 +558,10 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 
 async function main(): Promise<void> {
   const channel = detectChromeChannel();
+
+  const chromium = await getChromium();
+  const engineName = getEngineName();
+  console.log(`Browser engine: ${engineName}${channel ? ' (channel: chrome)' : ''}`);
 
   browser = await chromium.launch({
     headless: HEADLESS,

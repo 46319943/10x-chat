@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import chalk from 'chalk';
 import { Command } from 'commander';
-import { chromium } from 'playwright';
+import { getChromium } from '../browser/engine.js';
 import { acquireProfileLock, launchBrowser } from '../browser/index.js';
 import { resolveHeadlessMode } from '../browser/mode.js';
 import { saveStorageState } from '../browser/state.js';
@@ -132,7 +132,7 @@ async function loginAllWithTabs(
   await mkdir(profileDir, { recursive: true });
   const lock = await acquireProfileLock(profileDir);
 
-  const context = await chromium.launchPersistentContext(profileDir, {
+  const context = await (await getChromium()).launchPersistentContext(profileDir, {
     headless: false,
     viewport: { width: 1280, height: 900 },
     args: CHROMIUM_ARGS,
