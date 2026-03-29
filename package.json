@@ -1,6 +1,6 @@
 {
   "name": "10x-chat",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "CLI to chat with web AI agents (ChatGPT, Gemini, Claude) via browser automation",
   "type": "module",
   "main": "dist/index.js",
@@ -29,7 +29,8 @@
     "lint:fix": "biome check --fix .",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && bun run build"
+    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && bun run build",
+    "postinstall": "npx patchright install chromium 2>/dev/null || npx playwright install chromium 2>/dev/null || true"
   },
   "engines": {
     "node": ">=22"

@@ -38,12 +38,13 @@ export const STEALTH_INIT_SCRIPT = `
 
   // 4. Fix plugins/mimeTypes (headless has empty arrays)
   Object.defineProperty(navigator, 'plugins', {
-    get: () => [1, 2, 3, 4, 5].map(() => ({
-      name: 'Chrome PDF Plugin',
-      description: 'Portable Document Format',
-      filename: 'internal-pdf-viewer',
-      length: 1,
-    })),
+    get: () => [
+      { name: 'PDF Viewer', description: 'Portable Document Format', filename: 'internal-pdf-viewer', length: 1 },
+      { name: 'Chrome PDF Viewer', description: 'Portable Document Format', filename: 'internal-pdf-viewer', length: 1 },
+      { name: 'Chromium PDF Viewer', description: 'Portable Document Format', filename: 'internal-pdf-viewer', length: 1 },
+      { name: 'Microsoft Edge PDF Viewer', description: 'Portable Document Format', filename: 'internal-pdf-viewer', length: 1 },
+      { name: 'WebKit built-in PDF', description: 'Portable Document Format', filename: 'internal-pdf-viewer', length: 1 },
+    ],
   });
 
   // 5. Fix languages (some headless configs return empty)

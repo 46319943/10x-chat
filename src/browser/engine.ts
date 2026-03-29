@@ -15,7 +15,7 @@
 import type { BrowserType } from 'playwright';
 
 let _chromium: BrowserType | undefined;
-let _engineName: 'patchright' | 'playwright' = 'playwright';
+let _engineName: 'patchright' | 'playwright' | 'unknown' = 'unknown';
 let _loaded = false;
 
 async function loadEngine(): Promise<BrowserType> {
@@ -24,12 +24,14 @@ async function loadEngine(): Promise<BrowserType> {
   // Try Patchright first (drop-in Playwright replacement with stealth)
   try {
     const patchright = await import('patchright');
-    _chromium = patchright.chromium as BrowserType;
-    _engineName = 'patchright';
-    _loaded = true;
-    return _chromium;
+    if (patchright.chromium) {
+      _chromium = patchright.chromium as BrowserType;
+      _engineName = 'patchright';
+      _loaded = true;
+      return _chromium;
+    }
   } catch {
-    // Patchright not installed — fall back to Playwright
+    // Patchright not installed or broken — fall back to Playwright
   }
 
   try {
@@ -50,8 +52,8 @@ export async function getChromium(): Promise<BrowserType> {
   return loadEngine();
 }
 
-/** Which engine is active: 'patchright' or 'playwright'. */
-export function getEngineName(): 'patchright' | 'playwright' {
+/** Which engine is active. Returns 'unknown' if not yet loaded. */
+export function getEngineName(): 'patchright' | 'playwright' | 'unknown' {
   return _engineName;
 }
 
