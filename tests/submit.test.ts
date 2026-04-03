@@ -24,13 +24,13 @@ function createSubmitPage(options: { contenteditable: boolean; fillFails?: boole
   const locator = vi.fn((selector: string) => {
     if (selector === '#composer') {
       return {
-        first: () => composer,
+        first: () => ({ ...composer, isVisible: vi.fn(async () => contenteditable) }),
       };
     }
 
     if (selector === '#send') {
       return {
-        first: () => sendButton,
+        first: () => ({ ...sendButton, isVisible: vi.fn(async () => true) }),
       };
     }
 

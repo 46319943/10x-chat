@@ -116,36 +116,42 @@ async function waitForImages(page: Page, timeoutMs: number): Promise<void> {
 
 export const geminiActions: ProviderActions = {
   async selectModel(page: Page, model: string): Promise<void> {
-    // Check if the desired mode is already selected by reading the picker label
-    const picker = page.locator(SELECTORS.modelPicker).first();
-    const pickerVisible = await picker.isVisible().catch(() => false);
-    if (!pickerVisible) {
+    // Check current mode via page.evaluate (avoids locator.textContent timeout)
+    const pickerState = await page.evaluate((sel: string) => {
+      const btn = document.querySelector(sel);
+      if (!(btn instanceof HTMLElement) || btn.offsetWidth === 0) return { found: false, text: '' };
+      return { found: true, text: btn.textContent?.trim() ?? '' };
+    }, SELECTORS.modelPicker);
+
+    if (!pickerState.found) {
       console.warn(`Gemini mode picker not found — skipping model selection for "${model}"`);
       return;
     }
 
-    const currentMode = (await picker.textContent())?.trim() ?? '';
-    if (currentMode.toLowerCase() === model.toLowerCase()) {
+    if (pickerState.text.toLowerCase() === model.toLowerCase()) {
       return; // Already on the requested mode
     }
 
-    // Open the mode picker menu
-    await picker.click();
+    // Open the mode picker menu (Playwright click for React event dispatch)
+    await page.locator(SELECTORS.modelPicker).first().click();
     await page.waitForTimeout(1000);
 
     // Select by data-test-id (e.g. "Thinking" → "bard-mode-option-thinking")
     const testId = `bard-mode-option-${model.toLowerCase()}`;
-    const option = page.locator(`button[data-test-id="${testId}"]`).first();
-    const optionVisible = await option
-      .waitFor({ state: 'visible', timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!optionVisible) {
+    const clicked = await page.evaluate((tid: string) => {
+      const btn = document.querySelector(`button[data-test-id="${tid}"]`);
+      if (btn instanceof HTMLElement && btn.offsetWidth > 0) {
+        btn.click();
+        return true;
+      }
+      return false;
+    }, testId);
+
+    if (!clicked) {
       console.warn(`Mode "${model}" not found in Gemini picker — using current mode`);
       await page.keyboard.press('Escape');
       return;
     }
-    await option.click();
     await page.waitForTimeout(500);
   },
 

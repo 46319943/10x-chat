@@ -56,7 +56,7 @@ function createMockPage(options: { hasOnboardingModal?: boolean; hasComposer?: b
       keyboard: {
         press: vi.fn(async () => {}),
       },
-      evaluate: vi.fn(async () => {}),
+      evaluate: vi.fn(async () => true),
       url: vi.fn(() => 'https://chatgpt.com'),
       title: vi.fn(async () => 'ChatGPT'),
     },
@@ -120,7 +120,7 @@ describe('ChatGPT Overlay Dismissal', () => {
       waitForTimeout: vi.fn(async () => {}),
       waitForLoadState: vi.fn(async () => {}),
       keyboard: { press: vi.fn() },
-      evaluate: vi.fn(),
+      evaluate: vi.fn(async () => false),
       url: vi.fn(() => 'https://chatgpt.com'),
       title: vi.fn(async () => 'ChatGPT'),
     };

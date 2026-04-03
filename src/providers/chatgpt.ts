@@ -338,11 +338,14 @@ export const chatgptActions: ProviderActions = {
       // Dismiss any overlays that might be hiding the composer
       await dismissOverlays(page);
 
-      const composerVisible = await page
-        .locator(SELECTORS.composer)
-        .first()
-        .isVisible()
-        .catch(() => false);
+      const composerVisible = await page.evaluate((sel: string) => {
+        const els = document.querySelectorAll(sel);
+        for (let i = 0; i < els.length; i++) {
+          const el = els[i];
+          if (el instanceof HTMLElement && el.offsetWidth > 0 && el.offsetHeight > 0) return true;
+        }
+        return false;
+      }, SELECTORS.composer);
       if (composerVisible) return true;
 
       const loginVisible = await page

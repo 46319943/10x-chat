@@ -28,7 +28,19 @@ export async function submitPromptToComposer(
     sendTimeout = 5_000,
   } = opts;
 
-  const composer = page.locator(composerSelector).first();
+  // Find the first VISIBLE composer element.
+  // ChatGPT has a hidden fallback textarea that locator.first() picks up,
+  // so we try each sub-selector individually until we find a visible one.
+  let composer = page.locator(composerSelector).first();
+  const selectors = composerSelector.split(',').map((s) => s.trim());
+  for (const sel of selectors) {
+    const candidate = page.locator(sel).first();
+    const visible = await candidate.isVisible().catch(() => false);
+    if (visible) {
+      composer = candidate;
+      break;
+    }
+  }
   await composer.waitFor({ state: 'visible', timeout: composerTimeout });
 
   await composer.click();
